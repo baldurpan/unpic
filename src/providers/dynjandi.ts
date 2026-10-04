@@ -24,8 +24,17 @@
  * Two-sided sizes cover, as "Image Fitting" asks: `resize/WxH` scales to fill the box and
  * centre-crops, so no `crop` is emitted for `width` plus `height`.
  */
-import type { Operations } from "../types.ts";
-import { toCanonicalUrlString, toUrl } from "../utils.ts";
+import type {
+	Operations,
+	URLExtractor,
+	URLGenerator,
+	URLTransformer,
+} from "../types.ts";
+import {
+	createExtractAndGenerate,
+	toCanonicalUrlString,
+	toUrl,
+} from "../utils.ts";
 
 export interface DynjandiOperations extends Operations {
 	/**
@@ -201,9 +210,7 @@ function extractGroup(
 	}
 }
 
-export function extract(
-	url: string | URL,
-): { src: string; operations: DynjandiOperations } | null {
+export const extract: URLExtractor<"dynjandi"> = (url) => {
 	const parsed = parsePath(url);
 	if (!parsed) {
 		return null;
@@ -213,7 +220,7 @@ export function extract(
 		extractGroup(operations, group);
 	}
 	return { src: srcOf(parsed), operations };
-}
+};
 
 function srcOf({ url, id }: ParsedPath): string {
 	const src = new URL(url);
@@ -221,10 +228,7 @@ function srcOf({ url, id }: ParsedPath): string {
 	return toCanonicalUrlString(src);
 }
 
-export function generate(
-	src: string | URL,
-	operations: DynjandiOperations,
-): string {
+export const generate: URLGenerator<"dynjandi"> = (src, operations) => {
 	const parsed = parsePath(src);
 	if (!parsed) {
 		return toCanonicalUrlString(toUrl(src));
@@ -243,23 +247,9 @@ export function generate(
 	const result = new URL(parsed.url);
 	result.pathname = `/${parsed.id}/${chain.map((op) => `-/${op}`).join("")}`;
 	return toCanonicalUrlString(result);
-}
+};
 
-/**
- * Same behaviour as `createExtractAndGenerate(extract, generate)`: keep the operations already in the
- * URL, let defined ones in `operations` override them. Written out because that helper is typed by
- * `ImageCdn`, which does not list `dynjandi` until the provider is wired in.
- */
-export function transform(
-	src: string | URL,
-	operations: DynjandiOperations,
-): string {
-	const base = extract(src);
-	if (!base) {
-		return generate(src, operations);
-	}
-	const defined: DynjandiOperations = Object.fromEntries(
-		Object.entries(operations).filter(([, value]) => value !== undefined),
-	);
-	return generate(base.src, { ...base.operations, ...defined });
-}
+export const transform: URLTransformer<"dynjandi"> = createExtractAndGenerate(
+	extract,
+	generate,
+);
